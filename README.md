@@ -148,7 +148,7 @@ channels:
           - "Homing Pigeon"
 ```
 
-If we define a Go struct to represent this IPoAC binding, we can then parse these custom bindings directly from our AsyncAPI document. For instance, consider an AsyncAPI spec that includes this custom ipoac binding within the channels section, as shown below:
+If we define a Go struct to represent this IPoAC binding, we can then parse these custom bindings directly from our AsyncAPI document:
 
 ```go
 package main

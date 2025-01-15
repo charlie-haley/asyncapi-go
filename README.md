@@ -80,7 +80,6 @@ channels:
           retention.bytes: 1000000000
           delete.retention.ms: 86400000
           max.message.bytes: 1048588
-        bindingVersion: "0.5.0"
 ```
 
 We can then use this Go code to parse this document from a file named asyncapi.yaml, access the Kafka binding, and print its properties:
@@ -92,16 +91,19 @@ import (
 	"fmt"
 	"os"
 
-    "github.com/charlie-haley/asyncapi-go"
+	"github.com/charlie-haley/asyncapi-go"
+	"github.com/charlie-haley/asyncapi-go/asyncapi2"
 	"github.com/charlie-haley/asyncapi-go/bindings/kafka"
 )
 
 func main() {
 	filePath := "asyncapi.yaml"
 	data, _ := os.ReadFile(filePath)
-	doc, _ := main.ParseFromYAML(data)
+	doc, _ := asyncapi.ParseFromYAML(data)
 
-	channel, _ := doc.Channels["user-signup"]
+	// Type assert to asyncapi2.Document
+	v2Doc := doc.(*asyncapi2.Document)
+	channel := v2Doc.Channels["user-signup"]
 
 	kafkaBinding, _ := asyncapi.ParseBindings[kafka.ChannelBinding](channel.Bindings, "kafka")
 
@@ -113,7 +115,6 @@ func main() {
 	fmt.Printf("Retention (bytes): %d\n", kafkaBinding.TopicConfiguration.RetentionBytes)
 	fmt.Printf("Delete Retention (ms): %d\n", kafkaBinding.TopicConfiguration.DeleteRetentionMs)
 	fmt.Printf("Max Message Bytes: %d\n", kafkaBinding.TopicConfiguration.MaxMessageBytes)
-	fmt.Printf("Binding Version: %s\n", kafkaBinding.BindingVersion)
 }
 ```
 
@@ -155,10 +156,10 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 
-    "github.com/charlie-haley/asyncapi-go"
+	"github.com/charlie-haley/asyncapi-go"
+	"github.com/charlie-haley/asyncapi-go/asyncapi2"
 )
 
 type IpoacChannelBinding struct {
@@ -171,9 +172,10 @@ type IpoacChannelBinding struct {
 func main() {
 	filePath := "asyncapi.yaml"
 	data, _ := os.ReadFile(filePath)
-	doc, _ := main.ParseFromYAML(data)
+	doc, _ := asyncapi.ParseFromYAML(data)
 
-	channel, _ := doc.Channels["pigeon/post"]
+	v2Doc := doc.(*asyncapi2.Document)
+	channel := v2Doc.Channels["pigeon/post"]
 
 	ipoacBinding, _ := asyncapi.ParseBindings[IpoacChannelBinding](channel.Bindings, "ipoac")
 
@@ -181,80 +183,5 @@ func main() {
 	fmt.Printf("Default Route: %s\n", ipoacBinding.DefaultRoute)
 	fmt.Printf("Max Packet Size: %s\n", ipoacBinding.MaxPacketSize)
 	fmt.Printf("Allowed Species: %v\n", ipoacBinding.AllowedSpecies)
-}
-```
-
-### 🏗️ Creating an AsyncAPI Document
-
-This example shows how to programmatically create an AsyncAPI document with a Kafka channel binding using the fluent API:
-
-```go
-package main
-
-import (
-	"encoding/json"
-	"fmt"
-	"log"
-
-    "github.com/charlie-haley/asyncapi-go/asyncapi2"
-	"github.com/charlie-haley/asyncapi-go/bindings/kafka"
-)
-
-func main() {
-	// Create a new AsyncAPI document.
-	doc := asyncapi2.NewDocument().
-		WithAsyncAPI("2.6.0").
-		WithInfo(asyncapi2.NewInfo().
-			WithTitle("User Signup API").
-			WithVersion("1.0.0")).
-		WithServer("kafka-server", asyncapi2.NewServer().
-			WithURL("my-kafka-broker:9092").
-			WithProtocol("kafka"))
-
-	// Create a Kafka channel binding.
-	kafkaBinding := kafka.NewChannelBinding().
-		WithTopic("user-signup-topic").
-		WithPartitions(20).
-		WithReplicas(3).
-		WithTopicConfiguration(kafka.NewTopicConfiguration().
-			WithCleanupPolicy([]string{"delete", "compact"}).
-			WithRetentionMs(604800000).
-			WithRetentionBytes(1000000000).
-			WithDeleteRetentionMs(86400000).
-			WithMaxMessageBytes(1048588)).
-		WithBindingVersion("0.5.0")
-
-	// Create a channel and add the Kafka binding.
-	channel := asyncapi2.NewChannel().
-		WithAddress("user/signup").
-		WithPublish(asyncapi2.NewOperation().
-			WithMessage(asyncapi2.NewMessage().
-				WithPayload(map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"userId": map[string]interface{}{
-							"type": "string",
-						},
-					},
-				}))).
-		WithBindings(map[string]interface{}{
-			"kafka": kafkaBinding,
-		})
-
-	// Add the channel to the document.
-	doc = doc.WithChannel("user/signup", channel)
-
-	// Validate the document (optional but recommended).
-	if err := doc.Validate(); err != nil {
-		log.Fatalf("Validation error: %v", err)
-	}
-
-	// Convert the document to JSON (optional).
-	jsonData, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		log.Fatalf("Error marshaling to JSON: %v", err)
-	}
-
-	fmt.Printf("AsyncAPI Document with Kafka Binding:\n%s\n", string(jsonData))
 }
 ```

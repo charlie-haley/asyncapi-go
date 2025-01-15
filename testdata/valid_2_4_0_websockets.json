@@ -1,0 +1,57 @@
+{
+  "asyncapi": "2.4.0",
+  "info": {
+    "title": "Valid 2.4.0 WebSockets",
+    "version": "1.0.0"
+  },
+  "servers": {
+    "production": {
+      "url": "ws://example.com/ws",
+      "protocol": "ws"
+    }
+  },
+  "channels": {
+    "chat": {
+      "publish": {
+        "message": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            }
+          },
+          "bindings": {
+            "ws": {
+              "method": "SEND",
+              "bindingVersion": "0.1.0"
+            }
+          }
+        }
+      },
+      "bindings": {
+        "ws": {
+          "type": "channel",
+          "query": {
+            "type": "object",
+            "properties": {
+              "token": {
+                "type": "string"
+              }
+            }
+          },
+          "headers": {
+            "type": "object",
+            "properties": {
+              "Authorization": {
+                "type": "string"
+              }
+            }
+          },
+          "bindingVersion": "0.1.0"
+        }
+      }
+    }
+  }
+}

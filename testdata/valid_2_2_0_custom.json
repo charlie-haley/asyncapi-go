@@ -1,0 +1,38 @@
+{
+  "asyncapi": "2.2.0",
+  "info": {
+    "title": "Valid 2.2.0 Custom Binding",
+    "version": "1.0.0"
+  },
+  "channels": {
+    "event/received": {
+      "subscribe": {
+        "message": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "eventId": {
+                "type": "string"
+              }
+            }
+          },
+          "bindings": {
+            "custom": {
+              "type": "webhook",
+              "baseUrl": "https://example.com/webhook",
+              "method": "POST",
+              "bindingVersion": "0.1.0"
+            }
+          }
+        }
+      },
+      "bindings": {
+        "custom": {
+          "type": "event-queue",
+          "queueName": "eventQueue",
+          "bindingVersion": "0.1.0"
+        }
+      }
+    }
+  }
+}

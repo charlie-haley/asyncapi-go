@@ -1,0 +1,8 @@
+{
+  "asyncapi": "44.0.0",
+  "info": {
+    "title": "Invalid Version",
+    "version": "1.0.0"
+  },
+  "channels": {}
+}

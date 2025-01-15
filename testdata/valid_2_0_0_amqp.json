@@ -1,0 +1,48 @@
+{
+  "asyncapi": "2.0.0",
+  "info": {
+    "title": "Valid 2.0.0 AMQP",
+    "version": "1.0.0"
+  },
+  "channels": {
+    "user/signup": {
+      "publish": {
+        "message": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "userId": {
+                "type": "string"
+              }
+            }
+          },
+          "bindings": {
+            "amqp": {
+              "bindingVersion": "0.2.0",
+              "contentEncoding": "gzip",
+              "messageType": "user.signup"
+            }
+          }
+        }
+      },
+      "bindings": {
+        "amqp": {
+          "is": "routingKey",
+          "bindingVersion": "0.2.0",
+          "exchange": {
+            "name": "userSignupExchange",
+            "type": "topic",
+            "durable": true,
+            "autoDelete": false
+          },
+          "queue": {
+            "name": "userSignupQueue",
+            "durable": true,
+            "exclusive": false,
+            "autoDelete": false
+          }
+        }
+      }
+    }
+  }
+}

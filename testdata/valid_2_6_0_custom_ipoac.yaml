@@ -1,0 +1,31 @@
+asyncapi: "2.6.0"
+info:
+  title: Valid 2.6.0 with Custom IPoAC Binding
+  version: "1.0.0"
+channels:
+  pigeon/post:
+    address: "pigeon/post"
+    publish:
+      message:
+        payload:
+          type: object
+          properties:
+            messageId:
+              type: string
+            content:
+              type: string
+        bindings:
+          ipoac:
+            messageFormat: "parchment"
+            encryption: "wax-seal"
+            priority: "high"
+            bindingVersion: "0.1.0"
+    bindings:
+      ipoac:
+        carrier: "pigeon"
+        defaultRoute: "RFC 1149"
+        maxPacketSize: "256 bytes"
+        allowedSpecies:
+          - "Rock Dove"
+          - "Homing Pigeon"
+        bindingVersion: "0.1.0"

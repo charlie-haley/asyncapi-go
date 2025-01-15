@@ -1,0 +1,29 @@
+asyncapi: "2.1.0"
+info:
+  title: Valid 2.1.0 Kafka
+  version: "1.0.0"
+channels:
+  user-signedup:
+    address: "user/signedup"
+    publish:
+      message:
+        payload:
+          type: object
+          properties:
+            userId:
+              type: string
+        bindings:
+          kafka:
+            key:
+              type: string
+              enum: ["user-id"]
+            bindingVersion: "0.4.0"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          enum: ["myConsumerGroupId"]
+        clientId:
+          type: string
+          enum: ["myClientId"]
+        bindingVersion: "0.4.0"

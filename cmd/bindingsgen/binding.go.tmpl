@@ -1,0 +1,77 @@
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// THIS FILE IS GENERATED. DO NOT EDIT
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// If you would like to update properties for a binding,
+// edit the struct for the binding you'd like to update.
+// e.g {{.Package}}/channel.go and run `make generate` to re-gen
+// this file.
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+package {{.Package}}
+
+import (
+{{if .Structs}}
+	"encoding/json"
+	"sigs.k8s.io/yaml"
+{{end}}
+)
+
+{{range .Structs}}
+{{- $structName := .Name}}
+// New{{.Name}} creates a new {{.Name}} object
+func New{{.Name}}() *{{.Name}} {
+	return &{{.Name}}{
+{{- range .DefaultFields}}
+		{{.Name}}: {{.Value}},
+{{- end}}
+	}
+}
+
+{{range .Fields}}
+// With{{.Name}} sets the '{{.JsonTag}}' field of {{$structName}}
+func (obj *{{$structName}}) With{{.Name}}({{.ParamName}} {{.Type}}) *{{$structName}} {
+	obj.{{.Name}} = {{.ParamName}}
+	return obj
+}
+{{end}}
+
+{{if and .IsBinding (not .NoMarshalFuncs)}}
+// MarshalYAML is a custom marshaller that converts {{.Name}} to YAML
+func (t {{.Name}}) MarshalYAML() (interface{}, error) {
+    bytes, err := json.Marshal(t)
+    if err != nil {
+        return nil, err
+    }
+    var out interface{}
+    err = yaml.Unmarshal(bytes, &out) 
+    return out, err
+}
+
+// UnmarshalYAML is a custom unmarshaler that converts YAML to {{.Name}}
+func (t *{{.Name}}) UnmarshalYAML(unmarshal func(interface{}) error) error {
+    var temp interface{}
+    if err := unmarshal(&temp); err != nil {
+        return err
+    }
+    bytes, err := yaml.Marshal(temp)
+    if err != nil {
+        return err
+    }
+    return json.Unmarshal(bytes, t)
+}
+
+// MarshalJSON is a custom marshaller that converts {{.Name}} to JSON
+func (t {{.Name}}) MarshalJSON() ([]byte, error) {
+	type Alias {{.Name}}
+	return json.Marshal(struct{ Alias }{Alias(t)})
+}
+
+// UnmarshalJSON is a custom unmarshaler that converts JSON to {{.Name}}
+func (t *{{.Name}}) UnmarshalJSON(data []byte) error {
+	type Alias {{.Name}}
+	aux := struct{ *Alias }{Alias: (*Alias)(t)}
+	return json.Unmarshal(data, &aux)
+}
+{{end}}
+
+{{end}}

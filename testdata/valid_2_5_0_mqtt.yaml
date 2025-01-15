@@ -1,0 +1,35 @@
+asyncapi: "2.5.0"
+info:
+  title: Valid 2.5.0 MQTT
+  version: "1.0.0"
+servers:
+  mqtt:
+    url: "mqtt-broker:1883"
+    protocol: "mqtt"
+channels:
+  sensor/data:
+    address: "sensor/data"
+    publish:
+      message:
+        payload:
+          type: object
+          properties:
+            value:
+              type: number
+            timestamp:
+              type: integer
+        bindings:
+          mqtt:
+            qos: 1
+            retain: false
+            bindingVersion: "0.2.0"
+    bindings:
+      mqtt:
+        cleanSession: false
+        lastWill:
+          topic: "sensor/disconnect"
+          qos: 1
+          message: "Sensor disconnected"
+          retain: true
+        keepAlive: 60
+        bindingVersion: "0.2.0"

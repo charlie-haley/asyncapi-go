@@ -1,0 +1,44 @@
+asyncapi: "2.3.0"
+info:
+  title: Valid 2.3.0 Mixed Bindings
+  version: "1.0.0"
+servers:
+  kafka:
+    url: kafka-broker:9092
+    protocol: kafka
+    protocolVersion: "0.9.0"
+    bindings:
+      kafka:
+        schemaRegistryUrl: "http://schema-registry:8081"
+        schemaRegistryVendor: "confluent"
+        bindingVersion: "0.4.0"
+  amqp:
+    url: amqp-broker:5672
+    protocol: amqp
+    protocolVersion: "0.9.1"
+channels:
+  user/signup:
+    address: "user/signup"
+    publish:
+      message:
+        payload:
+          type: object
+          properties:
+            userId:
+              type: string
+        bindings:
+          kafka:
+            key:
+              type: string
+              enum: ["user-id"]
+            bindingVersion: "0.4.0"
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: userSignupExchange
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: "/"
+        bindingVersion: "0.2.0"

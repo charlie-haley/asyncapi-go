@@ -1,0 +1,63 @@
+{
+  "asyncapi": "2.6.0",
+  "info": {
+    "title": "Valid 2.6.0 Kafka with Additional Properties",
+    "version": "1.0.0"
+  },
+  "servers": {
+    "kafka": {
+      "url": "kafka-broker:9092",
+      "protocol": "kafka"
+    }
+  },
+  "channels": {
+    "user-signedup": {
+      "address": "user-signedup",
+      "publish": {
+        "message": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "userId": {
+                "type": "string"
+              }
+            }
+          },
+          "bindings": {
+            "kafka": {
+              "key": {
+                "type": "string",
+                "enum": ["user-id"]
+              },
+              "bindingVersion": "0.4.0",
+              "schemaIdLocation": "payload",
+              "schemaIdPayloadEncoding": "apicurio-protobuf",
+              "schemaLookupStrategy": "topicIdStrategy"
+            }
+          }
+        }
+      },
+      "bindings": {
+        "kafka": {
+          "topic": "my-specific-topic-name",
+          "partitions": 20,
+          "replicas": 3,
+          "topicConfiguration": {
+            "cleanup.policy": ["delete", "compact"],
+            "retention.ms": 604800000,
+            "retention.bytes": 1000000000,
+            "delete.retention.ms": 86400000,
+            "max.message.bytes": 1048588,
+            "confluent.key.schema.validation": true,
+            "confluent.key.subject.name.strategy": "TopicNameStrategy",
+            "confluent.value.schema.validation": true,
+            "confluent.value.subject.name.strategy": "TopicNameStrategy",
+            "my.custom.config.prop": "customValue1",
+            "another.custom.prop": 12345
+          },
+          "bindingVersion": "0.5.0"
+        }
+      }
+    }
+  }
+}

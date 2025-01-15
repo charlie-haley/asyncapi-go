@@ -108,11 +108,11 @@ func main() {
 	fmt.Printf("Kafka Topic: %s\n", kafkaBinding.Topic)
 	fmt.Printf("Partitions: %d\n", kafkaBinding.Partitions)
 	fmt.Printf("Replicas: %d\n", kafkaBinding.Replicas)
-    fmt.Printf("Cleanup Policy: %v\n", kafkaBinding.TopicConfiguration.CleanupPolicy)
-    fmt.Printf("Retention (ms): %d\n", kafkaBinding.TopicConfiguration.RetentionMs)
-    fmt.Printf("Retention (bytes): %d\n", kafkaBinding.TopicConfiguration.RetentionBytes)
-    fmt.Printf("Delete Retention (ms): %d\n", kafkaBinding.TopicConfiguration.DeleteRetentionMs)
-    fmt.Printf("Max Message Bytes: %d\n", kafkaBinding.TopicConfiguration.MaxMessageBytes)
+	fmt.Printf("Cleanup Policy: %v\n", kafkaBinding.TopicConfiguration.CleanupPolicy)
+	fmt.Printf("Retention (ms): %d\n", kafkaBinding.TopicConfiguration.RetentionMs)
+	fmt.Printf("Retention (bytes): %d\n", kafkaBinding.TopicConfiguration.RetentionBytes)
+	fmt.Printf("Delete Retention (ms): %d\n", kafkaBinding.TopicConfiguration.DeleteRetentionMs)
+	fmt.Printf("Max Message Bytes: %d\n", kafkaBinding.TopicConfiguration.MaxMessageBytes)
 	fmt.Printf("Binding Version: %s\n", kafkaBinding.BindingVersion)
 }
 ```

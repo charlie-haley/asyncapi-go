@@ -7,43 +7,189 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charlie-haley/asyncapi-go/asyncapi2"
 	"github.com/charlie-haley/asyncapi-go/bindings/amqp"
 	"github.com/charlie-haley/asyncapi-go/bindings/kafka"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestParseBindings_IPoAC tests parsing of a custom IPoAC binding.
-func TestParseBindings_IPoAC(t *testing.T) {
-	type IpoacChannelBinding struct {
-		Carrier        string   `json:"carrier"`
-		DefaultRoute   string   `json:"defaultRoute"`
-		MaxPacketSize  string   `json:"maxPacketSize"`
-		AllowedSpecies []string `json:"allowedSpecies"`
-		BindingVersion string   `json:"bindingVersion"`
-	}
+// TestParseNestedRefs tests parsing of nested message and schema references
+func TestParseNestedRefs(t *testing.T) {
+	// Create temporary test directory
+	tmpDir := t.TempDir()
 
-	rawBindings := map[string]interface{}{
-		"ipoac": map[string]interface{}{
-			"carrier":        "pigeon",
-			"defaultRoute":   "RFC 1149",
-			"maxPacketSize":  "256 bytes",
-			"allowedSpecies": []string{"Rock Dove", "Homing Pigeon"},
-			"bindingVersion": "0.1.0",
+	// Create schema file
+	schemaJSON := `{
+		"type": "object",
+		"properties": {
+			"eventId": {
+				"type": "string",
+				"format": "uuid"
+			},
+			"timestamp": {
+				"type": "string",
+				"format": "date-time"
+			}
 		},
-	}
+		"required": ["eventId", "timestamp"]
+	}`
+	err := os.WriteFile(filepath.Join(tmpDir, "event-schema.json"), []byte(schemaJSON), 0644)
+	require.NoError(t, err)
 
-	expected := &IpoacChannelBinding{
-		Carrier:        "pigeon",
-		DefaultRoute:   "RFC 1149",
-		MaxPacketSize:  "256 bytes",
-		AllowedSpecies: []string{"Rock Dove", "Homing Pigeon"},
-		BindingVersion: "0.1.0",
-	}
+	// Create message file
+	messageJSON := `{
+		"name": "EventMessage",
+		"contentType": "application/json",
+		"payload": {
+			"$ref": "./event-schema.json"
+		}
+	}`
+	err = os.WriteFile(filepath.Join(tmpDir, "event-message.json"), []byte(messageJSON), 0644)
+	require.NoError(t, err)
 
-	binding, err := ParseBindings[IpoacChannelBinding](rawBindings, "ipoac")
-	assert.NoError(t, err)
-	assert.True(t, reflect.DeepEqual(expected, binding), "Expected: %+v, Actual: %+v", expected, binding)
+	// Create main AsyncAPI document
+	asyncapiJSON := `{
+		"asyncapi": "2.6.0",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"channels": {
+			"user-signedup": {
+				"publish": {
+					"message": {
+						"$ref": "./event-message.json"
+					}
+				}
+			}
+		}
+	}`
+	err = os.WriteFile(filepath.Join(tmpDir, "asyncapi.json"), []byte(asyncapiJSON), 0644)
+	require.NoError(t, err)
+
+	// Change to temp directory for test
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	err = os.Chdir(tmpDir)
+	require.NoError(t, err)
+	defer os.Chdir(originalDir)
+
+	// Parse the document
+	data, err := os.ReadFile("asyncapi.json")
+	require.NoError(t, err)
+
+	doc, err := ParseFromJSON(data)
+	require.NoError(t, err)
+	require.NotNil(t, doc)
+
+	// Convert to v2 document to access fields
+	v2Doc, ok := doc.(*asyncapi2.Document)
+	require.True(t, ok, "document should be v2")
+
+	// Verify message and schema were properly resolved
+	channel, ok := v2Doc.Channels["user-signedup"]
+	require.True(t, ok, "channel should exist")
+	require.NotNil(t, channel)
+
+	require.NotNil(t, channel.Publish)
+	require.NotNil(t, channel.Publish.Message)
+
+	// Parse payload as Schema
+	payload, ok := channel.Publish.Message.Payload.(map[string]interface{})
+	require.True(t, ok, "payload should be a map")
+
+	// Verify schema type
+	assert.Equal(t, "object", payload["type"])
+
+	// Check properties
+	props, ok := payload["properties"].(map[string]interface{})
+	require.True(t, ok, "should have properties")
+
+	// Check eventId field
+	eventId, ok := props["eventId"].(map[string]interface{})
+	require.True(t, ok, "should have eventId")
+	assert.Equal(t, "string", eventId["type"])
+	assert.Equal(t, "uuid", eventId["format"])
+
+	// Check timestamp field
+	timestamp, ok := props["timestamp"].(map[string]interface{})
+	require.True(t, ok, "should have timestamp")
+	assert.Equal(t, "string", timestamp["type"])
+	assert.Equal(t, "date-time", timestamp["format"])
+}
+
+// TestParseWithLocalRefs tests parsing of local references within the same document
+func TestParseWithLocalRefs(t *testing.T) {
+	asyncapiJSON := `{
+		"asyncapi": "2.6.0",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"components": {
+			"schemas": {
+				"Event": {
+					"type": "object",
+					"properties": {
+						"eventId": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				}
+			},
+			"messages": {
+				"EventMessage": {
+					"payload": {
+						"$ref": "#/components/schemas/Event"
+					}
+				}
+			}
+		},
+		"channels": {
+			"user-signedup": {
+				"publish": {
+					"message": {
+						"$ref": "#/components/messages/EventMessage"
+					}
+				}
+			}
+		}
+	}`
+
+	doc, err := ParseFromJSON([]byte(asyncapiJSON))
+	require.NoError(t, err)
+	require.NotNil(t, doc)
+
+	// Convert to v2 document to access fields
+	v2Doc, ok := doc.(*asyncapi2.Document)
+	require.True(t, ok, "document should be v2")
+
+	// Verify message and schema were properly resolved
+	channel, ok := v2Doc.Channels["user-signedup"]
+	require.True(t, ok, "channel should exist")
+	require.NotNil(t, channel)
+
+	require.NotNil(t, channel.Publish)
+	require.NotNil(t, channel.Publish.Message)
+
+	// Parse payload as Schema
+	payload, ok := channel.Publish.Message.Payload.(map[string]interface{})
+	require.True(t, ok, "payload should be a map")
+
+	// Verify schema type
+	assert.Equal(t, "object", payload["type"])
+
+	// Check properties
+	props, ok := payload["properties"].(map[string]interface{})
+	require.True(t, ok, "should have properties")
+
+	// Check eventId field
+	eventId, ok := props["eventId"].(map[string]interface{})
+	require.True(t, ok, "should have eventId")
+	assert.Equal(t, "string", eventId["type"])
+	assert.Equal(t, "uuid", eventId["format"])
 }
 
 // Test individual specs

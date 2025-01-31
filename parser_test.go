@@ -14,6 +14,110 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestParseFileWithRelativeRefs tests the ParseFile function while using relative references
+func TestParseFileWithRelativeRefs(t *testing.T) {
+	// Create a temporary test directory structure
+	tmpDir := t.TempDir()
+	messagesDir := filepath.Join(tmpDir, "messages")
+	schemasDir := filepath.Join(tmpDir, "schemas")
+	require.NoError(t, os.MkdirAll(messagesDir, 0755))
+	require.NoError(t, os.MkdirAll(schemasDir, 0755))
+
+	// Create schema file (JSON)
+	schemaJSON := `{
+		"type": "object",
+		"properties": {
+			"customerId": {
+				"type": "string",
+				"format": "uuid"
+			},
+			"status": {
+				"type": "string",
+				"enum": ["active", "inactive"]
+			}
+		},
+		"required": ["customerId", "status"]
+	}`
+	err := os.WriteFile(filepath.Join(schemasDir, "customer.json"), []byte(schemaJSON), 0644)
+	require.NoError(t, err)
+
+	// Create message file as JSON, not YAML
+	messageJSON := `{
+		"name": "UpdateCustomerStatus",
+		"contentType": "application/json",
+		"payload": {
+			"$ref": "../schemas/customer.json"
+		}
+	}`
+	err = os.WriteFile(filepath.Join(messagesDir, "update-status.json"), []byte(messageJSON), 0644)
+	require.NoError(t, err)
+
+	// Create main AsyncAPI file
+	asyncapiJSON := `{
+		"asyncapi": "2.6.0",
+		"info": {
+			"title": "Customer API",
+			"version": "1.0.0"
+		},
+		"channels": {
+			"customer/status": {
+				"publish": {
+					"message": {
+						"$ref": "./messages/update-status.json"
+					}
+				}
+			}
+		}
+	}`
+	mainFilePath := filepath.Join(tmpDir, "asyncapi.json")
+	err = os.WriteFile(mainFilePath, []byte(asyncapiJSON), 0644)
+	require.NoError(t, err)
+
+	// Parse the main AsyncAPI file
+	doc, err := ParseFile(mainFilePath)
+	require.NoError(t, err)
+	require.NotNil(t, doc)
+
+	// Convert to v2 document to access fields
+	v2Doc, ok := doc.(*asyncapi2.Document)
+	require.True(t, ok, "document should be v2")
+
+	// Verify channel exists
+	channel, ok := v2Doc.Channels["customer/status"]
+	require.True(t, ok, "channel should exist")
+	require.NotNil(t, channel.Publish, "publish operation should exist")
+	require.NotNil(t, channel.Publish.Message, "message should exist")
+
+	// Verify message details
+	message := channel.Publish.Message
+	assert.Equal(t, "UpdateCustomerStatus", message.Name)
+	assert.Equal(t, "application/json", message.ContentType)
+
+	// Verify payload was resolved
+	payload, ok := message.Payload.(map[string]interface{})
+	require.True(t, ok, "payload should be a map")
+	assert.Equal(t, "object", payload["type"])
+
+	// Check properties
+	properties, ok := payload["properties"].(map[string]interface{})
+	require.True(t, ok, "should have properties")
+
+	// Check customerId field
+	customerId, ok := properties["customerId"].(map[string]interface{})
+	require.True(t, ok, "should have customerId")
+	assert.Equal(t, "string", customerId["type"])
+	assert.Equal(t, "uuid", customerId["format"])
+
+	// Check status field
+	status, ok := properties["status"].(map[string]interface{})
+	require.True(t, ok, "should have status")
+	assert.Equal(t, "string", status["type"])
+	enum, ok := status["enum"].([]interface{})
+	require.True(t, ok, "should have enum")
+	assert.Contains(t, enum, "active")
+	assert.Contains(t, enum, "inactive")
+}
+
 // TestParseNestedRefs tests parsing of nested message and schema references
 func TestParseNestedRefs(t *testing.T) {
 	// Create temporary test directory

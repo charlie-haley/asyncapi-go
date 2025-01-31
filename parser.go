@@ -3,6 +3,7 @@ package asyncapi
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -16,6 +17,12 @@ import (
 type BindingUnmarshaler interface {
 	UnmarshalJSON([]byte) error
 	UnmarshalYAML(func(interface{}) error) error
+}
+
+// ParseOptions contains options for parsing AsyncAPI documents
+type ParseOptions struct {
+	// FilePath is the path to the file being parsed. This is used to resolve relative refs.
+	FilePath string
 }
 
 // ParseBindings processes bindings for a given channel/operation/message
@@ -37,15 +44,20 @@ func ParseBindings[T any](rawBindings map[string]interface{}, bindingType string
 }
 
 // ParseFromJSON parses an AsyncAPI document from JSON
-func ParseFromJSON(data []byte) (spec.Document, error) {
+func ParseFromJSON(data []byte, opts ...ParseOptions) (spec.Document, error) {
 	// First resolve all references
 	var jsonDoc interface{}
 	if err := json.Unmarshal(data, &jsonDoc); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
-	// Create resolver with current directory as base path
-	resolver := refresolver.New(filepath.Dir("."))
+	// Get base path from options if provided
+	basePath := "."
+	if len(opts) > 0 && opts[0].FilePath != "" {
+		basePath = filepath.Dir(opts[0].FilePath)
+	}
+
+	resolver := refresolver.New(basePath)
 	resolver.Cache["#"] = jsonDoc
 
 	// Resolve all references in the document
@@ -82,24 +94,34 @@ func ParseFromJSON(data []byte) (spec.Document, error) {
 }
 
 // ParseFromYAML parses an AsyncAPI document from YAML
-func ParseFromYAML(data []byte) (spec.Document, error) {
+func ParseFromYAML(data []byte, opts ...ParseOptions) (spec.Document, error) {
 	jsonData, err := yaml.YAMLToJSON(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert YAML to JSON: %w", err)
 	}
-	return ParseFromJSON(jsonData)
+	return ParseFromJSON(jsonData, opts...)
 }
 
 // Parse detects format and parses accordingly
-func Parse(data []byte) (spec.Document, error) {
+func Parse(data []byte, opts ...ParseOptions) (spec.Document, error) {
 	if isYAML(data) {
-		return ParseFromYAML(data)
+		return ParseFromYAML(data, opts...)
 	}
-	return ParseFromJSON(data)
+	return ParseFromJSON(data, opts...)
 }
 
 // isYAML determines if the input appears to be YAML
 func isYAML(data []byte) bool {
 	trimmed := strings.TrimSpace(string(data))
 	return !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[")
+}
+
+// ParseFile reads and parses an AsyncAPI file, automatically handling the filepath for reference resolution
+func ParseFile(filePath string) (spec.Document, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	return Parse(data, ParseOptions{FilePath: filePath})
 }

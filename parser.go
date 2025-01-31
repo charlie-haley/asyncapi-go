@@ -3,9 +3,11 @@ package asyncapi
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/charlie-haley/asyncapi-go/asyncapi2"
+	"github.com/charlie-haley/asyncapi-go/internal/refresolver"
 	"github.com/charlie-haley/asyncapi-go/spec"
 	"sigs.k8s.io/yaml"
 )
@@ -36,18 +38,40 @@ func ParseBindings[T any](rawBindings map[string]interface{}, bindingType string
 
 // ParseFromJSON parses an AsyncAPI document from JSON
 func ParseFromJSON(data []byte) (spec.Document, error) {
+	// First resolve all references
+	var jsonDoc interface{}
+	if err := json.Unmarshal(data, &jsonDoc); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	// Create resolver with current directory as base path
+	resolver := refresolver.New(filepath.Dir("."))
+	resolver.Cache["#"] = jsonDoc
+
+	// Resolve all references in the document
+	resolvedDoc, err := resolver.ResolveRefs(jsonDoc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve references: %w", err)
+	}
+
+	// Convert back to JSON to parse as AsyncAPI document
+	resolvedData, err := json.Marshal(resolvedDoc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal resolved document: %w", err)
+	}
+
 	// Unmarshal just enough to get the version
 	var versionDoc struct {
 		Version string `json:"asyncapi"`
 	}
-	if err := json.Unmarshal(data, &versionDoc); err != nil {
+	if err := json.Unmarshal(resolvedData, &versionDoc); err != nil {
 		return nil, fmt.Errorf("failed to parse document version: %w", err)
 	}
 
 	// Parse according to version
 	switch {
 	case strings.HasPrefix(versionDoc.Version, "2."):
-		doc, err := asyncapi2.ParseFromJSON(data)
+		doc, err := asyncapi2.ParseFromJSON(resolvedData)
 		if err != nil {
 			return nil, err
 		}

@@ -26,73 +26,37 @@ func New(basePath string) *RefResolver {
 }
 
 func (r *RefResolver) ResolveRefs(doc interface{}) (interface{}, error) {
-	return r.resolveRefsRecursive(doc, make(map[string]bool), false)
+	return r.resolveRefsRecursive(doc, make(map[string]bool))
 }
 
-func (r *RefResolver) resolveRefsRecursive(v interface{}, visited map[string]bool, isMessage bool) (interface{}, error) {
+func (r *RefResolver) resolveRefsRecursive(v interface{}, visited map[string]bool) (interface{}, error) {
 	switch val := v.(type) {
 	case map[string]interface{}:
-		result := make(map[string]interface{})
-
-		// Check if this is a message with schema and headers
-		if _, hasPayload := val["payload"]; hasPayload {
-			if schemaFormat, ok := val["schemaFormat"].(string); ok && strings.Contains(schemaFormat, "application/schema+yaml") {
-				// Deep resolve all refs in the message
-				for k, v := range val {
-					if k == "payload" || k == "headers" {
-						if m, ok := v.(map[string]interface{}); ok {
-							if ref, ok := m["$ref"]; ok {
-								refStr, ok := ref.(string)
-								if !ok {
-									return nil, fmt.Errorf("$ref value must be a string, got %T", ref)
-								}
-								resolved, err := r.resolveRef(refStr)
-								if err != nil {
-									return nil, err
-								}
-								result[k] = resolved
-								continue
-							}
-						}
-					}
-					resolved, err := r.resolveRefsRecursive(v, visited, false)
-					if err != nil {
-						return nil, err
-					}
-					result[k] = resolved
-				}
-				return result, nil
-			}
-		}
-
-		// Handle other object with $ref
-		if ref, ok := val["$ref"]; ok && !isMessage {
+		if ref, ok := val["$ref"]; ok {
 			refStr, ok := ref.(string)
 			if !ok {
 				return nil, fmt.Errorf("$ref value must be a string, got %T", ref)
 			}
 
-			refVisited := make(map[string]bool)
-			for k, v := range visited {
-				refVisited[k] = v
-			}
-
-			if refVisited[refStr] {
+			// Check for circular refs
+			if visited[refStr] {
 				return nil, fmt.Errorf("circular reference detected: %s", refStr)
 			}
-			refVisited[refStr] = true
+
+			newVisited := copyVisitedMap(visited)
+			newVisited[refStr] = true
 
 			resolved, err := r.resolveRef(refStr)
 			if err != nil {
 				return nil, err
 			}
 
-			return resolved, nil
+			return r.resolveRefsRecursive(resolved, newVisited)
 		}
 
-		// Process regular object
+		result := make(map[string]interface{})
 		for k, v := range val {
-			resolved, err := r.resolveRefsRecursive(v, visited, false)
+			resolved, err := r.resolveRefsRecursive(v, visited)
 			if err != nil {
 				return nil, err
 			}
@@ -103,7 +67,7 @@ func (r *RefResolver) resolveRefsRecursive(v interface{}, visited map[string]boo
 	case []interface{}:
 		result := make([]interface{}, len(val))
 		for i, v := range val {
-			resolved, err := r.resolveRefsRecursive(v, visited, false)
+			resolved, err := r.resolveRefsRecursive(v, visited)
 			if err != nil {
 				return nil, err
 			}
@@ -114,6 +78,15 @@ func (r *RefResolver) resolveRefsRecursive(v interface{}, visited map[string]boo
 	default:
 		return v, nil
 	}
+}
+
+// Helper function to copy the visited map
+func copyVisitedMap(visited map[string]bool) map[string]bool {
+	newVisited := make(map[string]bool)
+	for k, v := range visited {
+		newVisited[k] = v
+	}
+	return newVisited
 }
 
 func (r *RefResolver) resolveRef(ref string) (interface{}, error) {
@@ -142,6 +115,11 @@ func (r *RefResolver) resolveRef(ref string) (interface{}, error) {
 }
 
 func (r *RefResolver) resolveLocalRef(ref string) (interface{}, error) {
+	// Handle empty fragment
+	if ref == "#" {
+		return r.Cache["#"], nil
+	}
+
 	parts := strings.Split(strings.TrimPrefix(ref, "#/"), "/")
 	doc := r.Cache["#"]
 
@@ -171,19 +149,30 @@ func (r *RefResolver) resolveFileRef(ref string) (interface{}, error) {
 		absPath = filepath.Join(r.basePath, ref)
 	}
 
+	prevFile := r.currentFile
+	r.currentFile = absPath
+	defer func() {
+		r.currentFile = prevFile
+	}()
+
 	data, err := os.ReadFile(absPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file %s: %w", ref, err)
+		return nil, fmt.Errorf("failed to read file %s: %w", absPath, err)
 	}
 
 	var doc interface{}
 	if err := json.Unmarshal(data, &doc); err != nil {
 		if err := yaml.Unmarshal(data, &doc); err != nil {
-			return nil, fmt.Errorf("failed to parse file %s as YAML: %w", ref, err)
+			return nil, fmt.Errorf("failed to parse file %s as JSON or YAML: %w", absPath, err)
 		}
 	}
 
-	return doc, nil
+	resolved, err := r.resolveRefsRecursive(doc, make(map[string]bool))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve references in %s: %w", absPath, err)
+	}
+
+	return resolved, nil
 }
 
 func (r *RefResolver) resolveRemoteRef(ref string) (interface{}, error) {
@@ -203,5 +192,10 @@ func (r *RefResolver) resolveRemoteRef(ref string) (interface{}, error) {
 		return nil, fmt.Errorf("failed to parse response from %s: %w", ref, err)
 	}
 
-	return doc, nil
+	resolved, err := r.resolveRefsRecursive(doc, make(map[string]bool))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve references in %s: %w", ref, err)
+	}
+
+	return resolved, nil
 }

@@ -40,18 +40,16 @@ func ParseBindings[T any](rawBindings map[string]interface{}, bindingType string
 		return &binding, nil
 	}
 
-	return nil, fmt.Errorf("binding type %s not found", bindingType) // Error if binding doesn't exist
+	return nil, fmt.Errorf("binding type %s not found", bindingType)
 }
 
 // ParseFromJSON parses an AsyncAPI document from JSON
 func ParseFromJSON(data []byte, opts ...ParseOptions) (spec.Document, error) {
-	// First resolve all references
 	var jsonDoc interface{}
 	if err := json.Unmarshal(data, &jsonDoc); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
-	// Get base path from options if provided
 	basePath := "."
 	if len(opts) > 0 && opts[0].FilePath != "" {
 		basePath = filepath.Dir(opts[0].FilePath)
@@ -60,19 +58,16 @@ func ParseFromJSON(data []byte, opts ...ParseOptions) (spec.Document, error) {
 	resolver := refresolver.New(basePath)
 	resolver.Cache["#"] = jsonDoc
 
-	// Resolve all references in the document
 	resolvedDoc, err := resolver.ResolveRefs(jsonDoc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve references: %w", err)
 	}
 
-	// Convert back to JSON to parse as AsyncAPI document
 	resolvedData, err := json.Marshal(resolvedDoc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal resolved document: %w", err)
 	}
 
-	// Unmarshal just enough to get the version
 	var versionDoc struct {
 		Version string `json:"asyncapi"`
 	}
@@ -80,14 +75,13 @@ func ParseFromJSON(data []byte, opts ...ParseOptions) (spec.Document, error) {
 		return nil, fmt.Errorf("failed to parse document version: %w", err)
 	}
 
-	// Parse according to version
 	switch {
 	case strings.HasPrefix(versionDoc.Version, "2."):
 		doc, err := asyncapi2.ParseFromJSON(resolvedData)
 		if err != nil {
 			return nil, err
 		}
-		return spec.Document(doc), nil
+		return doc, nil
 	default:
 		return nil, fmt.Errorf("unsupported AsyncAPI version: %s", versionDoc.Version)
 	}

@@ -52,7 +52,7 @@ type TemplateData struct {
 	AllStructs map[string]Struct
 }
 
-//TODO: migrate away from ast.Package and use go/types
+// TODO: migrate away from ast.Package and use go/types
 func findParentBindings(pkg *ast.Package) map[string]bool {
 	parentBindings := make(map[string]bool)
 
@@ -240,7 +240,6 @@ func main() {
 
 	allStructs := make(map[string]Struct)
 	parentBindings := make(map[string]bool)
-	seen := make(map[string]bool)
 	var finalStructs []Struct
 	var pkgName string
 
@@ -271,7 +270,7 @@ func main() {
 	}
 
 	// Second pass: process bindings and nested structs
-	seen = make(map[string]bool)
+	seen := make(map[string]bool)
 	for _, pkg := range packages {
 		for _, file := range pkg.Files {
 			for _, decl := range file.Decls {

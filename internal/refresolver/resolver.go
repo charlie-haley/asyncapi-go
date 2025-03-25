@@ -5,20 +5,19 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"sigs.k8s.io/yaml"
 )
 
-// RefResolver handles resolving references in AsyncAPI documents
 type RefResolver struct {
 	Cache       map[string]interface{}
 	basePath    string
 	currentFile string
 }
 
-// New creates a new RefResolver instance
 func New(basePath string) *RefResolver {
 	return &RefResolver{
 		Cache:    make(map[string]interface{}),
@@ -26,7 +25,6 @@ func New(basePath string) *RefResolver {
 	}
 }
 
-// ResolveRefs takes a JSON/YAML document and resolves all $ref pointers
 func (r *RefResolver) ResolveRefs(doc interface{}) (interface{}, error) {
 	return r.resolveRefsRecursive(doc, make(map[string]bool))
 }
@@ -40,42 +38,20 @@ func (r *RefResolver) resolveRefsRecursive(v interface{}, visited map[string]boo
 				return nil, fmt.Errorf("$ref value must be a string, got %T", ref)
 			}
 
-			// Create a new visited map for this reference path
-			refVisited := make(map[string]bool)
-			for k, v := range visited {
-				refVisited[k] = v
-			}
-
-			if refVisited[refStr] {
+			// Check for circular refs
+			if visited[refStr] {
 				return nil, fmt.Errorf("circular reference detected: %s", refStr)
 			}
-			refVisited[refStr] = true
+
+			newVisited := copyVisitedMap(visited)
+			newVisited[refStr] = true
 
 			resolved, err := r.resolveRef(refStr)
 			if err != nil {
 				return nil, err
 			}
 
-			previousFile := r.currentFile
-
-			if !strings.HasPrefix(refStr, "#") && !strings.HasPrefix(refStr, "http") {
-				if filepath.IsAbs(refStr) {
-					r.currentFile = refStr
-				} else {
-					// If we have a current file, resolve relative to it
-					if r.currentFile != "" {
-						r.currentFile = filepath.Join(filepath.Dir(r.currentFile), refStr)
-					} else {
-						r.currentFile = filepath.Join(r.basePath, refStr)
-					}
-				}
-			}
-
-			result, err := r.resolveRefsRecursive(resolved, refVisited)
-
-			r.currentFile = previousFile
-
-			return result, err
+			return r.resolveRefsRecursive(resolved, newVisited)
 		}
 
 		result := make(map[string]interface{})
@@ -104,6 +80,15 @@ func (r *RefResolver) resolveRefsRecursive(v interface{}, visited map[string]boo
 	}
 }
 
+// Helper function to copy the visited map
+func copyVisitedMap(visited map[string]bool) map[string]bool {
+	newVisited := make(map[string]bool)
+	for k, v := range visited {
+		newVisited[k] = v
+	}
+	return newVisited
+}
+
 func (r *RefResolver) resolveRef(ref string) (interface{}, error) {
 	if cached, ok := r.Cache[ref]; ok {
 		return cached, nil
@@ -130,98 +115,87 @@ func (r *RefResolver) resolveRef(ref string) (interface{}, error) {
 }
 
 func (r *RefResolver) resolveLocalRef(ref string) (interface{}, error) {
-	parts := strings.Split(strings.TrimPrefix(ref, "#/"), "/")
-
-	var current = r.Cache["#"]
-
-	for _, part := range parts {
-		part = strings.ReplaceAll(part, "~1", "/")
-		part = strings.ReplaceAll(part, "~0", "~")
-
-		switch v := current.(type) {
-		case map[string]interface{}:
-			var ok bool
-			current, ok = v[part]
-			if !ok {
-				return nil, fmt.Errorf("failed to resolve reference: %s not found", part)
-			}
-		default:
-			return nil, fmt.Errorf("invalid reference path: %s is not an object", part)
-		}
+	// Handle empty fragment
+	if ref == "#" {
+		return r.Cache["#"], nil
 	}
 
-	return current, nil
+	parts := strings.Split(strings.TrimPrefix(ref, "#/"), "/")
+	doc := r.Cache["#"]
+
+	if m, ok := doc.(map[string]interface{}); ok {
+		result := interface{}(m)
+		for _, part := range parts {
+			if m, ok := result.(map[string]interface{}); ok {
+				if val, ok := m[part]; ok {
+					result = val
+					continue
+				}
+			}
+			return nil, fmt.Errorf("failed to resolve path component %q in reference %s", part, ref)
+		}
+		return result, nil
+	}
+	return nil, fmt.Errorf("failed to resolve reference: %s", ref)
 }
 
 func (r *RefResolver) resolveFileRef(ref string) (interface{}, error) {
-	filePath, fragment := splitFragment(ref)
-
 	var absPath string
-	if filepath.IsAbs(filePath) {
-		absPath = filePath
+	if filepath.IsAbs(ref) {
+		absPath = ref
 	} else if r.currentFile != "" {
-		// If we have a current file, resolve relative to it
-		absPath = filepath.Join(filepath.Dir(r.currentFile), filePath)
+		absPath = filepath.Join(filepath.Dir(r.currentFile), ref)
 	} else {
-		// Otherwise resolve relative to base path
-		absPath = filepath.Join(r.basePath, filePath)
+		absPath = filepath.Join(r.basePath, ref)
 	}
+
+	prevFile := r.currentFile
+	r.currentFile = absPath
+	defer func() {
+		r.currentFile = prevFile
+	}()
 
 	data, err := os.ReadFile(absPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file %s: %w", filePath, err)
+		return nil, fmt.Errorf("failed to read file %s: %w", absPath, err)
 	}
 
 	var doc interface{}
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("failed to parse file %s: %w", filePath, err)
+		if err := yaml.Unmarshal(data, &doc); err != nil {
+			return nil, fmt.Errorf("failed to parse file %s as JSON or YAML: %w", absPath, err)
+		}
 	}
 
-	if fragment != "" {
-		r.Cache["#"] = doc
-		return r.resolveLocalRef("#" + fragment)
+	resolved, err := r.resolveRefsRecursive(doc, make(map[string]bool))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve references in %s: %w", absPath, err)
 	}
 
-	return doc, nil
+	return resolved, nil
 }
 
 func (r *RefResolver) resolveRemoteRef(ref string) (interface{}, error) {
-	u, err := url.Parse(ref)
+	resp, err := http.Get(ref)
 	if err != nil {
-		return nil, fmt.Errorf("invalid URL %s: %w", ref, err)
-	}
-
-	fragment := u.Fragment
-	u.Fragment = ""
-
-	resp, err := http.Get(u.String())
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch %s: %w", u.String(), err)
+		return nil, fmt.Errorf("failed to fetch %s: %w", ref, err)
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response from %s: %w", u.String(), err)
+		return nil, fmt.Errorf("failed to read response from %s: %w", ref, err)
 	}
 
 	var doc interface{}
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("failed to parse response from %s: %w", u.String(), err)
+		return nil, fmt.Errorf("failed to parse response from %s: %w", ref, err)
 	}
 
-	if fragment != "" {
-		r.Cache["#"] = doc
-		return r.resolveLocalRef("#" + fragment)
+	resolved, err := r.resolveRefsRecursive(doc, make(map[string]bool))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve references in %s: %w", ref, err)
 	}
 
-	return doc, nil
-}
-
-func splitFragment(ref string) (string, string) {
-	parts := strings.SplitN(ref, "#", 2)
-	if len(parts) == 1 {
-		return parts[0], ""
-	}
-	return parts[0], parts[1]
+	return resolved, nil
 }

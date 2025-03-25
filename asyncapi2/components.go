@@ -2,14 +2,14 @@ package asyncapi2
 
 type Components struct {
 	Messages map[string]*Message `json:"messages,omitempty"`
-	Schemas  map[string]*Schema  `json:"schemas,omitempty"`
+	Schemas  map[string]any      `json:"schemas,omitempty"`
 	Servers  map[string]*Server  `json:"servers,omitempty"`
 }
 
 func NewComponents() *Components {
 	return &Components{
 		Messages: make(map[string]*Message),
-		Schemas:  make(map[string]*Schema),
+		Schemas:  make(map[string]any),
 		Servers:  make(map[string]*Server),
 	}
 }
@@ -19,7 +19,7 @@ func (c *Components) WithMessage(name string, message *Message) *Components {
 	return c
 }
 
-func (c *Components) WithSchema(name string, schema *Schema) *Components {
+func (c *Components) WithSchema(name string, schema any) *Components {
 	c.Schemas[name] = schema
 	return c
 }

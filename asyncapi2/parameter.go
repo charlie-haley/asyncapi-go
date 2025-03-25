@@ -1,8 +1,8 @@
 package asyncapi2
 
 type Parameter struct {
-	Description string  `json:"description,omitempty"`
-	Schema      *Schema `json:"schema,omitempty"`
+	Description string `json:"description,omitempty"`
+	Schema      any    `json:"schema,omitempty"`
 }
 
 func NewParameter() *Parameter {
@@ -14,7 +14,7 @@ func (p *Parameter) WithDescription(description string) *Parameter {
 	return p
 }
 
-func (p *Parameter) WithSchema(schema *Schema) *Parameter {
+func (p *Parameter) WithSchema(schema any) *Parameter {
 	p.Schema = schema
 	return p
 }

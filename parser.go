@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/charlie-haley/asyncapi-go/asyncapi2"
-	"github.com/charlie-haley/asyncapi-go/internal/refresolver"
+	"github.com/charlie-haley/asyncapi-go/pkg/refresolver"
 	"github.com/charlie-haley/asyncapi-go/spec"
 	"sigs.k8s.io/yaml"
 )

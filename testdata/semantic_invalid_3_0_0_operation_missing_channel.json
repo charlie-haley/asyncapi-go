@@ -1,0 +1,18 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "Operation Missing Channel Reference",
+    "version": "1.0.0"
+  },
+  "channels": {
+    "events": {
+      "address": "events"
+    }
+  },
+  "operations": {
+    "sendEvent": {
+      "action": "send",
+      "title": "Send Event - missing required channel reference"
+    }
+  }
+}

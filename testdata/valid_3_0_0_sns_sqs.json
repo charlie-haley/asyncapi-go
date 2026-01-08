@@ -1,0 +1,192 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "Notification Service",
+    "version": "1.0.0",
+    "description": "AWS SNS/SQS based notification service"
+  },
+  "servers": {
+    "aws": {
+      "host": "sqs.us-east-1.amazonaws.com",
+      "protocol": "sqs",
+      "description": "AWS SQS endpoint"
+    }
+  },
+  "channels": {
+    "notificationTopic": {
+      "address": "arn:aws:sns:us-east-1:123456789:notifications",
+      "description": "SNS topic for broadcasting notifications",
+      "messages": {
+        "Notification": {
+          "$ref": "#/components/messages/Notification"
+        }
+      },
+      "bindings": {
+        "sns": {
+          "name": "notifications-topic",
+          "ordering": {
+            "type": "standard",
+            "contentBasedDeduplication": false
+          },
+          "tags": {
+            "environment": "production",
+            "team": "platform"
+          },
+          "bindingVersion": "0.1.0"
+        }
+      }
+    },
+    "emailQueue": {
+      "address": "https://sqs.us-east-1.amazonaws.com/123456789/email-notifications",
+      "description": "SQS queue for email notifications",
+      "messages": {
+        "EmailNotification": {
+          "$ref": "#/components/messages/EmailNotification"
+        }
+      },
+      "bindings": {
+        "sqs": {
+          "queue": {
+            "name": "email-notifications-queue",
+            "fifoQueue": false,
+            "deliveryDelay": 0,
+            "visibilityTimeout": 30,
+            "receiveMessageWaitTime": 20,
+            "messageRetentionPeriod": 345600,
+            "redrivePolicy": {
+              "deadLetterQueue": {
+                "name": "email-notifications-dlq",
+                "arn": "arn:aws:sqs:us-east-1:123456789:email-notifications-dlq"
+              },
+              "maxReceiveCount": 3
+            },
+            "tags": {
+              "service": "notifications"
+            }
+          },
+          "bindingVersion": "0.2.0"
+        }
+      }
+    },
+    "priorityQueue": {
+      "address": "https://sqs.us-east-1.amazonaws.com/123456789/priority-notifications.fifo",
+      "description": "FIFO queue for priority notifications",
+      "messages": {
+        "PriorityNotification": {
+          "$ref": "#/components/messages/PriorityNotification"
+        }
+      },
+      "bindings": {
+        "sqs": {
+          "queue": {
+            "name": "priority-notifications.fifo",
+            "fifoQueue": true,
+            "deduplicationScope": "messageGroup",
+            "fifoThroughputLimit": "perMessageGroupId",
+            "visibilityTimeout": 60,
+            "messageRetentionPeriod": 86400
+          },
+          "bindingVersion": "0.2.0"
+        }
+      }
+    }
+  },
+  "operations": {
+    "publishNotification": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/notificationTopic"
+      },
+      "title": "Publish Notification",
+      "summary": "Publishes a notification to SNS topic"
+    },
+    "consumeEmailNotifications": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/emailQueue"
+      },
+      "title": "Consume Email Notifications",
+      "summary": "Processes email notifications from SQS queue"
+    },
+    "consumePriorityNotifications": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/priorityQueue"
+      },
+      "title": "Consume Priority Notifications"
+    }
+  },
+  "components": {
+    "messages": {
+      "Notification": {
+        "name": "Notification",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "notificationId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": {
+              "type": "string",
+              "enum": ["email", "sms", "push"]
+            },
+            "recipient": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": ["notificationId", "type", "recipient", "message"]
+        }
+      },
+      "EmailNotification": {
+        "name": "EmailNotification",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "string",
+              "format": "email"
+            },
+            "subject": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "html": {
+              "type": "boolean"
+            }
+          },
+          "required": ["to", "subject", "body"]
+        }
+      },
+      "PriorityNotification": {
+        "name": "PriorityNotification",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "priority": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": ["priority", "message"]
+        }
+      }
+    }
+  }
+}

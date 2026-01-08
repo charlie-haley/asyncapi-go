@@ -1,0 +1,210 @@
+asyncapi: 3.0.0
+info:
+  title: Analytics Events Service
+  version: 1.2.0
+  description: Google Pub/Sub based analytics event streaming
+  contact:
+    name: Analytics Team
+    url: https://analytics.example.com
+  license:
+    name: MIT
+
+servers:
+  gcp:
+    host: pubsub.googleapis.com
+    protocol: googlepubsub
+    description: Google Cloud Pub/Sub
+
+channels:
+  pageViews:
+    address: projects/my-project/topics/page-views
+    description: Topic for page view events
+    messages:
+      PageViewEvent:
+        $ref: '#/components/messages/PageViewEvent'
+    bindings:
+      googlepubsub:
+        messageRetentionDuration: 604800s
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - us-central1
+            - us-east1
+            - europe-west1
+        schemaSettings:
+          encoding: JSON
+          name: projects/my-project/schemas/page-view-schema
+        labels:
+          environment: production
+          team: analytics
+        bindingVersion: 0.2.0
+
+  clickEvents:
+    address: projects/my-project/topics/click-events
+    description: Topic for user click events
+    messages:
+      ClickEvent:
+        $ref: '#/components/messages/ClickEvent'
+    bindings:
+      googlepubsub:
+        messageRetentionDuration: 259200s
+        schemaSettings:
+          encoding: JSON
+          name: projects/my-project/schemas/click-event-schema
+        labels:
+          environment: production
+        bindingVersion: 0.2.0
+
+  conversionEvents:
+    address: projects/my-project/topics/conversion-events
+    description: Topic for conversion tracking
+    messages:
+      ConversionEvent:
+        $ref: '#/components/messages/ConversionEvent'
+    bindings:
+      googlepubsub:
+        messageRetentionDuration: 2592000s
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - us-central1
+        schemaSettings:
+          encoding: BINARY
+          name: projects/my-project/schemas/conversion-schema
+          firstRevisionId: v1
+          lastRevisionId: v3
+        bindingVersion: 0.2.0
+
+operations:
+  publishPageView:
+    action: send
+    channel:
+      $ref: '#/channels/pageViews'
+    title: Publish Page View
+    summary: Publishes page view analytics events
+
+  publishClickEvent:
+    action: send
+    channel:
+      $ref: '#/channels/clickEvents'
+    title: Publish Click Event
+
+  consumeConversions:
+    action: receive
+    channel:
+      $ref: '#/channels/conversionEvents'
+    title: Consume Conversions
+    summary: Processes conversion events for reporting
+
+components:
+  messages:
+    PageViewEvent:
+      name: PageViewEvent
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          eventId:
+            type: string
+            format: uuid
+          sessionId:
+            type: string
+          userId:
+            type: string
+          pageUrl:
+            type: string
+            format: uri
+          referrer:
+            type: string
+            format: uri
+          userAgent:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          metadata:
+            type: object
+            additionalProperties: true
+        required:
+          - eventId
+          - sessionId
+          - pageUrl
+          - timestamp
+
+    ClickEvent:
+      name: ClickEvent
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          eventId:
+            type: string
+            format: uuid
+          sessionId:
+            type: string
+          elementId:
+            type: string
+          elementType:
+            type: string
+            enum:
+              - button
+              - link
+              - image
+              - form
+          pageUrl:
+            type: string
+            format: uri
+          coordinates:
+            type: object
+            properties:
+              x:
+                type: integer
+              y:
+                type: integer
+          timestamp:
+            type: string
+            format: date-time
+        required:
+          - eventId
+          - sessionId
+          - elementId
+          - timestamp
+
+    ConversionEvent:
+      name: ConversionEvent
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          conversionId:
+            type: string
+            format: uuid
+          userId:
+            type: string
+          conversionType:
+            type: string
+            enum:
+              - signup
+              - purchase
+              - subscription
+              - lead
+          value:
+            type: number
+            format: float
+          currency:
+            type: string
+            pattern: ^[A-Z]{3}$
+          timestamp:
+            type: string
+            format: date-time
+          attribution:
+            type: object
+            properties:
+              source:
+                type: string
+              medium:
+                type: string
+              campaign:
+                type: string
+        required:
+          - conversionId
+          - conversionType
+          - timestamp

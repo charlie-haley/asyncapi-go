@@ -1,0 +1,11 @@
+# Invalid: Using v2 server 'url' field instead of v3 'host'
+# In v3, servers use 'host' and optionally 'pathname' instead of 'url'
+asyncapi: 3.0.0
+info:
+  title: Invalid v2 Server URL Style
+  version: 1.0.0
+servers:
+  production:
+    # v2 pattern - using 'url' (INVALID in v3, should use 'host')
+    url: kafka://kafka.example.com:9092
+    protocol: kafka

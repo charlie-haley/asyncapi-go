@@ -1,0 +1,14 @@
+# Invalid: Operation missing required 'action' field
+asyncapi: 3.0.0
+info:
+  title: Missing Action Service
+  version: 1.0.0
+channels:
+  userEvents:
+    address: user/events
+operations:
+  sendUserEvent:
+    # Missing required 'action' field (must be 'send' or 'receive')
+    channel:
+      $ref: '#/channels/userEvents'
+    title: Send User Event

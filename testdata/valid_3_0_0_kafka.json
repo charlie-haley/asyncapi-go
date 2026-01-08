@@ -1,0 +1,154 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "User Events Service",
+    "version": "1.0.0",
+    "description": "Service that handles user lifecycle events",
+    "contact": {
+      "name": "Platform Team",
+      "email": "platform@example.com",
+      "url": "https://example.com/support"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0"
+    }
+  },
+  "servers": {
+    "production": {
+      "host": "kafka.example.com:9092",
+      "protocol": "kafka",
+      "protocolVersion": "3.0.0",
+      "description": "Production Kafka cluster"
+    },
+    "staging": {
+      "host": "kafka-staging.example.com:9092",
+      "protocol": "kafka",
+      "description": "Staging Kafka cluster"
+    }
+  },
+  "channels": {
+    "userSignedUp": {
+      "address": "user.signedup",
+      "description": "Channel for user signup events",
+      "messages": {
+        "UserSignedUp": {
+          "$ref": "#/components/messages/UserSignedUp"
+        }
+      },
+      "bindings": {
+        "kafka": {
+          "topic": "user-signedup-events",
+          "partitions": 12,
+          "replicas": 3,
+          "topicConfiguration": {
+            "cleanup.policy": ["delete"],
+            "retention.ms": 604800000,
+            "retention.bytes": 1073741824
+          },
+          "bindingVersion": "0.5.0"
+        }
+      }
+    },
+    "userDeleted": {
+      "address": "user.deleted",
+      "description": "Channel for user deletion events",
+      "messages": {
+        "UserDeleted": {
+          "$ref": "#/components/messages/UserDeleted"
+        }
+      },
+      "bindings": {
+        "kafka": {
+          "topic": "user-deleted-events",
+          "partitions": 6,
+          "replicas": 3,
+          "bindingVersion": "0.5.0"
+        }
+      }
+    }
+  },
+  "operations": {
+    "publishUserSignedUp": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/userSignedUp"
+      },
+      "title": "Publish User Signed Up",
+      "summary": "Publishes an event when a new user signs up",
+      "messages": [
+        {
+          "$ref": "#/channels/userSignedUp/messages/UserSignedUp"
+        }
+      ]
+    },
+    "consumeUserDeleted": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/userDeleted"
+      },
+      "title": "Consume User Deleted",
+      "summary": "Consumes user deletion events"
+    }
+  },
+  "components": {
+    "messages": {
+      "UserSignedUp": {
+        "name": "UserSignedUp",
+        "title": "User Signed Up Event",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "userId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Unique identifier for the user"
+            },
+            "email": {
+              "type": "string",
+              "format": "email",
+              "description": "User's email address"
+            },
+            "signupTimestamp": {
+              "type": "string",
+              "format": "date-time",
+              "description": "When the user signed up"
+            }
+          },
+          "required": ["userId", "email", "signupTimestamp"]
+        }
+      },
+      "UserDeleted": {
+        "name": "UserDeleted",
+        "title": "User Deleted Event",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "userId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "deletedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "reason": {
+              "type": "string",
+              "enum": ["user_request", "admin_action", "inactivity"]
+            }
+          },
+          "required": ["userId", "deletedAt"]
+        }
+      }
+    },
+    "schemas": {
+      "UserId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Unique user identifier"
+      }
+    }
+  }
+}

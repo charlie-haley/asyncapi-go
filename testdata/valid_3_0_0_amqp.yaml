@@ -1,0 +1,106 @@
+asyncapi: 3.0.0
+info:
+  title: Order Processing Service
+  version: 2.1.0
+  description: Handles order creation and processing via AMQP
+  contact:
+    name: Orders Team
+    email: orders@example.com
+
+servers:
+  production:
+    host: rabbitmq.example.com:5672
+    protocol: amqp
+    protocolVersion: 0-9-1
+    description: Production RabbitMQ cluster
+
+channels:
+  orderCreated:
+    address: orders.created
+    description: Channel for new order events
+    messages:
+      OrderCreated:
+        $ref: '#/components/messages/OrderCreated'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: orders-exchange
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /production
+        bindingVersion: 0.3.0
+
+  orderQueue:
+    address: orders-processing-queue
+    description: Queue for processing orders
+    messages:
+      OrderCreated:
+        $ref: '#/components/messages/OrderCreated'
+    bindings:
+      amqp:
+        is: queue
+        queue:
+          name: orders-processing-queue
+          durable: true
+          exclusive: false
+          autoDelete: false
+          vhost: /production
+        bindingVersion: 0.3.0
+
+operations:
+  publishOrderCreated:
+    action: send
+    channel:
+      $ref: '#/channels/orderCreated'
+    title: Publish Order Created
+    summary: Publishes an event when a new order is created
+
+  consumeOrders:
+    action: receive
+    channel:
+      $ref: '#/channels/orderQueue'
+    title: Consume Orders
+    summary: Consumes orders from the processing queue
+
+components:
+  messages:
+    OrderCreated:
+      name: OrderCreated
+      title: Order Created Event
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          orderId:
+            type: string
+            format: uuid
+          customerId:
+            type: string
+            format: uuid
+          items:
+            type: array
+            items:
+              type: object
+              properties:
+                productId:
+                  type: string
+                quantity:
+                  type: integer
+                  minimum: 1
+                price:
+                  type: number
+                  format: float
+          totalAmount:
+            type: number
+            format: float
+          createdAt:
+            type: string
+            format: date-time
+        required:
+          - orderId
+          - customerId
+          - items
+          - totalAmount
+          - createdAt

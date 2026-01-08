@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charlie-haley/asyncapi-go/asyncapi2"
+	"github.com/charlie-haley/asyncapi-go/asyncapi3"
 	"github.com/charlie-haley/asyncapi-go/pkg/refresolver"
 	"github.com/charlie-haley/asyncapi-go/spec"
 	"sigs.k8s.io/yaml"
@@ -78,6 +79,12 @@ func ParseFromJSON(data []byte, opts ...ParseOptions) (spec.Document, error) {
 	switch {
 	case strings.HasPrefix(versionDoc.Version, "2."):
 		doc, err := asyncapi2.ParseFromJSON(resolvedData)
+		if err != nil {
+			return nil, err
+		}
+		return doc, nil
+	case strings.HasPrefix(versionDoc.Version, "3."):
+		doc, err := asyncapi3.ParseFromJSON(resolvedData)
 		if err != nil {
 			return nil, err
 		}

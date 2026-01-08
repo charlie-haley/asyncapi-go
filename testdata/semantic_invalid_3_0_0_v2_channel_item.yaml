@@ -1,0 +1,15 @@
+# Invalid: Using v2 channel item structure with operation directly on channel
+# In v3, channels only define address and messages, operations are separate
+asyncapi: 3.0.0
+info:
+  title: Invalid v2 Channel Item Style
+  version: 1.0.0
+channels:
+  user/created:
+    # v2 pattern - operation embedded in channel (INVALID in v3)
+    operationId: onUserCreated
+    description: User creation events
+    message:
+      name: UserCreated
+      payload:
+        type: object

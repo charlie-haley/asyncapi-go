@@ -1,0 +1,8 @@
+{
+  "asyncapi": "3.0.0",
+  "channels": {
+    "test": {
+      "address": "test"
+    }
+  }
+}

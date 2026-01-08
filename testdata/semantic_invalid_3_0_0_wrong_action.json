@@ -1,0 +1,21 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "Wrong Action Value Service",
+    "version": "1.0.0"
+  },
+  "channels": {
+    "userEvents": {
+      "address": "user/events"
+    }
+  },
+  "operations": {
+    "doSomething": {
+      "action": "publish",
+      "channel": {
+        "$ref": "#/channels/userEvents"
+      },
+      "title": "Invalid action - should be 'send' or 'receive', not 'publish'"
+    }
+  }
+}

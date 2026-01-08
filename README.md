@@ -1,187 +1,176 @@
 # asyncapi-go
 
-**NOTICE: This library is currently under active development and is not yet recommended for production use. Functionality may change significantly, and stability is not guaranteed.**
+Go library for parsing and working with [AsyncAPI](https://www.asyncapi.com/) specifications. Supports both AsyncAPI 2.x and 3.x versions.
 
-Go library for parsing and working with [AsyncAPI](https://www.asyncapi.com/) specifications. It currently supports AsyncAPI version 2.x, allowing you to load, validate, and access data within your AsyncAPI documents.
+## Supported Versions
 
-## ✅ Supported Versions
+| Version | Status |
+|---------|--------|
+| 2.0.0 - 2.6.0 | Supported |
+| 3.0.0 | Supported |
 
-Currently, this library supports the following AsyncAPI versions:
+## Supported Bindings
 
-- **2.0.0**
-- **2.1.0**
-- **2.2.0**
-- **2.3.0**
-- **2.4.0**
-- **2.5.0**
-- **2.6.0**
+All official AsyncAPI bindings with defined properties are supported:
 
-## 🔗 Supported Bindings
+| Binding | Version | Description |
+|---------|---------|-------------|
+| amqp | 0.3.0 | RabbitMQ / AMQP 0-9-1 |
+| anypointmq | 0.1.0 | MuleSoft Anypoint MQ |
+| googlepubsub | 0.2.0 | Google Cloud Pub/Sub |
+| http | 0.3.0 | HTTP/REST |
+| ibmmq | 0.1.0 | IBM MQ |
+| jms | 0.0.1 | Java Message Service |
+| kafka | 0.5.0 | Apache Kafka |
+| mqtt | 0.2.0 | MQTT 3.x/5.x |
+| nats | 0.1.0 | NATS |
+| pulsar | 0.1.0 | Apache Pulsar |
+| sns | 0.3.0 | AWS SNS |
+| solace | 0.4.0 | Solace PubSub+ |
+| sqs | 0.3.0 | AWS SQS |
+| websockets | 0.1.0 | WebSockets |
 
-This library is under active development, and support for all bindings is not yet complete. Currently, the following bindings are supported:
+## Installation
 
-- amqp
-- kafka
-- sns
-- sqs
+```bash
+go get github.com/charlie-haley/asyncapi-go
+```
 
-## 🚀 Usage
+## Usage
 
-### 📑 Parsing an AsyncAPI Document
-
-Here's how to parse a basic AsyncAPI document:
+### Parsing an AsyncAPI Document
 
 ```go
 package main
 
 import (
     "fmt"
-
     "github.com/charlie-haley/asyncapi-go"
 )
 
 func main() {
-	asyncapiDocument := ]byte(`
-asyncapi: '2.6.0'
-info:
-  title: My API
-  version: '1.0.0'
-channels:
-  example/channel:
-    address: 'example/channel'
-`)
+    // Parse from file
+    doc, err := asyncapi.ParseFile("asyncapi.yaml")
+    if err != nil {
+        panic(err)
+    }
 
-	doc, _ := asyncapi.Parse(asyncapiDocument)
-
-	fmt.Printf("AsyncAPI Version: %s\n", doc.GetVersion())
+    fmt.Printf("Title: %s\n", doc.GetTitle())
+    fmt.Printf("Version: %s\n", doc.GetVersion())
 }
 ```
 
-### 🧩 Parsing a Binding
-
-This example demonstrates how to parse a standard Kafka channel binding from a full AsyncAPI document. Let's say we have an AsyncAPI specification that looks like this, with a `kafka` binding in the `channels` section:
-
-```yaml
-asyncapi: "2.6.0"
-info:
-  title: Kafka Example
-  version: "1.0.0"
-channels:
-  user-signup:
-    address: "user-signup"
-    bindings:
-      kafka:
-        topic: "my-topic"
-        partitions: 20
-        replicas: 3
-        topicConfiguration:
-          cleanup.policy: ["delete", "compact"]
-          retention.ms: 604800000
-          retention.bytes: 1000000000
-          delete.retention.ms: 86400000
-          max.message.bytes: 1048588
-```
-
-We can then use this Go code to parse this document from a file named asyncapi.yaml, access the Kafka binding, and print its properties:
+### Working with AsyncAPI v3
 
 ```go
 package main
 
 import (
-	"fmt"
-	"os"
-
-	"github.com/charlie-haley/asyncapi-go"
-	"github.com/charlie-haley/asyncapi-go/asyncapi2"
-	"github.com/charlie-haley/asyncapi-go/bindings/kafka"
+    "fmt"
+    "github.com/charlie-haley/asyncapi-go"
+    "github.com/charlie-haley/asyncapi-go/asyncapi3"
+    "github.com/charlie-haley/asyncapi-go/bindings/kafka"
 )
 
 func main() {
-	filePath := "asyncapi.yaml"
-	data, _ := os.ReadFile(filePath)
-	doc, _ := asyncapi.ParseFromYAML(data)
+    doc, _ := asyncapi.ParseFile("asyncapi-v3.yaml")
 
-	// Type assert to asyncapi2.Document
-	v2Doc := doc.(*asyncapi2.Document)
-	channel := v2Doc.Channels["user-signup"]
+    // Type assert to v3 document
+    v3Doc := doc.(*asyncapi3.Document)
 
-	kafkaBinding, _ := asyncapi.ParseBindings[kafka.ChannelBinding](channel.Bindings, "kafka")
+    // Access channels
+    for name, channel := range v3Doc.Channels {
+        fmt.Printf("Channel: %s (address: %s)\n", name, channel.Address)
 
-	fmt.Printf("Kafka Topic: %s\n", kafkaBinding.Topic)
-	fmt.Printf("Partitions: %d\n", kafkaBinding.Partitions)
-	fmt.Printf("Replicas: %d\n", kafkaBinding.Replicas)
-	fmt.Printf("Cleanup Policy: %v\n", kafkaBinding.TopicConfiguration.CleanupPolicy)
-	fmt.Printf("Retention (ms): %d\n", kafkaBinding.TopicConfiguration.RetentionMs)
-	fmt.Printf("Retention (bytes): %d\n", kafkaBinding.TopicConfiguration.RetentionBytes)
-	fmt.Printf("Delete Retention (ms): %d\n", kafkaBinding.TopicConfiguration.DeleteRetentionMs)
-	fmt.Printf("Max Message Bytes: %d\n", kafkaBinding.TopicConfiguration.MaxMessageBytes)
+        // Parse Kafka binding if present
+        if channel.HasBinding("kafka") {
+            binding, _ := asyncapi.ParseBindings[kafka.ChannelBinding](channel.Bindings, "kafka")
+            fmt.Printf("  Kafka topic: %s, partitions: %d\n", binding.Topic, binding.Partitions)
+        }
+    }
+
+    // Access operations (v3 specific)
+    for name, op := range v3Doc.Operations {
+        fmt.Printf("Operation: %s (action: %s)\n", name, op.Action)
+    }
 }
 ```
 
-### 🕊️ Parsing a Custom Binding
-
-Let's say you want to extend your AsyncAPI specification with custom information not covered by the standard bindings. AsyncAPI allows you to do this using "bindings." Imagine you've created a specialized binding for a unique protocol, like [IP over Avian Carriers (IPoAC)](https://en.wikipedia.org/wiki/IP_over_Avian_Carriers) and you'd like to parse it into a Go struct.
-
-```yaml
-asyncapi: "2.6.0"
-info:
-  title: IPoAC Example
-  version: "1.0.0"
-channels:
-  pigeon/post:
-    address: "pigeon/post"
-    publish:
-      message:
-        payload:
-          type: object
-          properties:
-            messageId:
-              type: string
-            content:
-              type: string
-    bindings:
-      ipoac:
-        carrier: "pigeon"
-        defaultRoute: "RFC 1149"
-        maxPacketSize: "256 bytes"
-        allowedSpecies:
-          - "Rock Dove"
-          - "Homing Pigeon"
-```
-
-If we define a Go struct to represent this IPoAC binding, we can then parse these custom bindings directly from our AsyncAPI document:
+### Working with AsyncAPI v2
 
 ```go
 package main
 
 import (
-	"fmt"
-	"os"
-
-	"github.com/charlie-haley/asyncapi-go"
-	"github.com/charlie-haley/asyncapi-go/asyncapi2"
+    "fmt"
+    "github.com/charlie-haley/asyncapi-go"
+    "github.com/charlie-haley/asyncapi-go/asyncapi2"
+    "github.com/charlie-haley/asyncapi-go/bindings/kafka"
 )
 
-type IpoacChannelBinding struct {
-	Carrier        string   `json:"carrier"`
-	DefaultRoute   string   `json:"defaultRoute"`
-	MaxPacketSize  string   `json:"maxPacketSize"`
-	AllowedSpecies []string `json:"allowedSpecies"`
-}
-
 func main() {
-	filePath := "asyncapi.yaml"
-	data, _ := os.ReadFile(filePath)
-	doc, _ := asyncapi.ParseFromYAML(data)
+    doc, _ := asyncapi.ParseFile("asyncapi-v2.yaml")
 
-	v2Doc := doc.(*asyncapi2.Document)
-	channel := v2Doc.Channels["pigeon/post"]
+    // Type assert to v2 document
+    v2Doc := doc.(*asyncapi2.Document)
 
-	ipoacBinding, _ := asyncapi.ParseBindings[IpoacChannelBinding](channel.Bindings, "ipoac")
+    // Access channels
+    for name, channel := range v2Doc.Channels {
+        fmt.Printf("Channel: %s\n", name)
 
-	fmt.Printf("Carrier: %s\n", ipoacBinding.Carrier)
-	fmt.Printf("Default Route: %s\n", ipoacBinding.DefaultRoute)
-	fmt.Printf("Max Packet Size: %s\n", ipoacBinding.MaxPacketSize)
-	fmt.Printf("Allowed Species: %v\n", ipoacBinding.AllowedSpecies)
+        // Parse Kafka binding
+        if binding, err := asyncapi.ParseBindings[kafka.ChannelBinding](channel.Bindings, "kafka"); err == nil {
+            fmt.Printf("  Topic: %s\n", binding.Topic)
+        }
+    }
 }
 ```
+
+### Parsing Protocol Bindings
+
+Bindings can be parsed from channels, operations, messages, and servers:
+
+```go
+import (
+    "github.com/charlie-haley/asyncapi-go"
+    "github.com/charlie-haley/asyncapi-go/bindings/kafka"
+    "github.com/charlie-haley/asyncapi-go/bindings/amqp"
+    "github.com/charlie-haley/asyncapi-go/bindings/sqs"
+)
+
+// Kafka channel binding
+kafkaBinding, _ := asyncapi.ParseBindings[kafka.ChannelBinding](channel.Bindings, "kafka")
+fmt.Printf("Topic: %s, Partitions: %d\n", kafkaBinding.Topic, kafkaBinding.Partitions)
+
+// AMQP channel binding
+amqpBinding, _ := asyncapi.ParseBindings[amqp.ChannelBinding](channel.Bindings, "amqp")
+fmt.Printf("Exchange: %s, Queue: %s\n", amqpBinding.Exchange.Name, amqpBinding.Queue.Name)
+
+// SQS channel binding
+sqsBinding, _ := asyncapi.ParseBindings[sqs.ChannelBinding](channel.Bindings, "sqs")
+fmt.Printf("Queue: %s, FIFO: %v\n", sqsBinding.Queue.Name, sqsBinding.Queue.FifoQueue)
+```
+
+### Custom Bindings
+
+You can parse custom bindings by defining your own struct:
+
+```go
+type CustomBinding struct {
+    CustomField string `json:"customField"`
+    Options     []string `json:"options"`
+}
+
+binding, _ := asyncapi.ParseBindings[CustomBinding](channel.Bindings, "custom")
+```
+
+## Reference Resolution
+
+The library automatically resolves `$ref` references within documents, including:
+- Local references (`#/components/messages/UserMessage`)
+- File references (`./common/schemas.yaml`)
+- Remote references (`https://example.com/schemas.json`)
+
+## License
+
+MIT

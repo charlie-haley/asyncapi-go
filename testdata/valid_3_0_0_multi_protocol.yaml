@@ -1,0 +1,294 @@
+asyncapi: 3.0.0
+info:
+  title: Multi-Protocol Event Gateway
+  version: 3.0.0
+  description: |
+    A comprehensive event gateway supporting multiple protocols.
+    This service acts as a central hub for event distribution.
+  termsOfService: https://example.com/terms
+  contact:
+    name: Platform Engineering
+    email: platform@example.com
+    url: https://platform.example.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  tags:
+    - name: events
+      description: Event-related operations
+    - name: gateway
+      description: Gateway functionality
+
+servers:
+  kafkaProduction:
+    host: kafka.example.com:9092
+    protocol: kafka
+    protocolVersion: 3.0.0
+    description: Production Kafka cluster
+    tags:
+      - name: production
+
+  rabbitProduction:
+    host: rabbitmq.example.com:5672
+    protocol: amqp
+    protocolVersion: 0-9-1
+    description: Production RabbitMQ
+
+  awsSqs:
+    host: sqs.us-east-1.amazonaws.com
+    protocol: sqs
+    description: AWS SQS for async processing
+
+channels:
+  inboundEvents:
+    address: events.inbound
+    title: Inbound Events Channel
+    description: Receives all inbound events from external sources
+    servers:
+      - $ref: '#/servers/kafkaProduction'
+    messages:
+      GenericEvent:
+        $ref: '#/components/messages/GenericEvent'
+    bindings:
+      kafka:
+        topic: inbound-events
+        partitions: 24
+        replicas: 3
+        topicConfiguration:
+          cleanup.policy:
+            - delete
+          retention.ms: 86400000
+        bindingVersion: 0.5.0
+
+  processedEvents:
+    address: events.processed
+    description: Channel for processed/enriched events
+    servers:
+      - $ref: '#/servers/rabbitProduction'
+    messages:
+      ProcessedEvent:
+        $ref: '#/components/messages/ProcessedEvent'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: processed-events-exchange
+          type: topic
+          durable: true
+          autoDelete: false
+        bindingVersion: 0.3.0
+
+  deadLetterQueue:
+    address: events.dlq
+    description: Dead letter queue for failed events
+    servers:
+      - $ref: '#/servers/awsSqs'
+    messages:
+      FailedEvent:
+        $ref: '#/components/messages/FailedEvent'
+    bindings:
+      sqs:
+        queue:
+          name: events-dlq
+          fifoQueue: false
+          messageRetentionPeriod: 1209600
+          visibilityTimeout: 300
+        bindingVersion: 0.2.0
+
+  auditLog:
+    address: audit.events
+    description: Audit log for all event processing
+    messages:
+      AuditEntry:
+        $ref: '#/components/messages/AuditEntry'
+    bindings:
+      kafka:
+        topic: audit-log
+        partitions: 6
+        replicas: 3
+        topicConfiguration:
+          cleanup.policy:
+            - compact
+          retention.ms: 2592000000
+        bindingVersion: 0.5.0
+
+operations:
+  receiveInbound:
+    action: receive
+    channel:
+      $ref: '#/channels/inboundEvents'
+    title: Receive Inbound Events
+    summary: Receives events from external sources
+    description: |
+      Main entry point for all external events.
+      Events are validated and enriched before processing.
+    tags:
+      - name: events
+
+  publishProcessed:
+    action: send
+    channel:
+      $ref: '#/channels/processedEvents'
+    title: Publish Processed Events
+    summary: Publishes processed events to downstream consumers
+
+  sendToDeadLetter:
+    action: send
+    channel:
+      $ref: '#/channels/deadLetterQueue'
+    title: Send to Dead Letter
+    summary: Routes failed events to DLQ for manual review
+
+  publishAudit:
+    action: send
+    channel:
+      $ref: '#/channels/auditLog'
+    title: Publish Audit Entry
+    summary: Records audit trail for all event processing
+
+components:
+  messages:
+    GenericEvent:
+      name: GenericEvent
+      title: Generic Inbound Event
+      summary: A generic event from external sources
+      contentType: application/json
+      headers:
+        type: object
+        properties:
+          correlationId:
+            type: string
+            format: uuid
+          source:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+      payload:
+        type: object
+        properties:
+          eventId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+          source:
+            type: string
+          data:
+            type: object
+            additionalProperties: true
+          metadata:
+            type: object
+            properties:
+              version:
+                type: string
+              producedAt:
+                type: string
+                format: date-time
+        required:
+          - eventId
+          - eventType
+          - source
+          - data
+
+    ProcessedEvent:
+      name: ProcessedEvent
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          originalEventId:
+            type: string
+            format: uuid
+          processedEventId:
+            type: string
+            format: uuid
+          eventType:
+            type: string
+          enrichedData:
+            type: object
+          processingMetadata:
+            type: object
+            properties:
+              processedAt:
+                type: string
+                format: date-time
+              processorId:
+                type: string
+              duration:
+                type: integer
+                description: Processing duration in milliseconds
+        required:
+          - originalEventId
+          - processedEventId
+          - eventType
+          - enrichedData
+
+    FailedEvent:
+      name: FailedEvent
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          originalEvent:
+            type: object
+          failureReason:
+            type: string
+          errorCode:
+            type: string
+          failedAt:
+            type: string
+            format: date-time
+          retryCount:
+            type: integer
+          stackTrace:
+            type: string
+        required:
+          - originalEvent
+          - failureReason
+          - failedAt
+
+    AuditEntry:
+      name: AuditEntry
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          auditId:
+            type: string
+            format: uuid
+          eventId:
+            type: string
+            format: uuid
+          action:
+            type: string
+            enum:
+              - received
+              - validated
+              - enriched
+              - published
+              - failed
+          timestamp:
+            type: string
+            format: date-time
+          actor:
+            type: string
+          details:
+            type: object
+        required:
+          - auditId
+          - eventId
+          - action
+          - timestamp
+
+  schemas:
+    EventMetadata:
+      type: object
+      properties:
+        version:
+          type: string
+        producedAt:
+          type: string
+          format: date-time
+        traceId:
+          type: string

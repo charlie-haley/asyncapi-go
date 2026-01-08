@@ -1,0 +1,20 @@
+# Invalid: Using v2 publish/subscribe pattern in v3
+# In v3, operations are decoupled from channels and use action: send/receive
+asyncapi: 3.0.0
+info:
+  title: Invalid v2 Style Service
+  version: 1.0.0
+channels:
+  userSignup:
+    # v2 pattern - publish/subscribe directly on channel (INVALID in v3)
+    publish:
+      message:
+        payload:
+          type: object
+          properties:
+            userId:
+              type: string
+    subscribe:
+      message:
+        payload:
+          type: object
